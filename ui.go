@@ -123,10 +123,16 @@ func (u *ui) Bind(name string, f interface{}) error {
 			return nil, errors.New("function arguments mismatch")
 		}
 		args := []reflect.Value{}
+		functionType := reflect.TypeOf((**Function)(nil))
 		for i := range raw {
 			arg := reflect.New(v.Type().In(i))
 			if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {
 				return nil, err
+			}
+			if arg.Type() == functionType {
+				fn := arg.Elem().Interface().(*Function)
+				fn.ui = u
+				defer fn.Close()
 			}
 			args = append(args, arg.Elem())
 		}

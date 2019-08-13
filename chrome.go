@@ -396,6 +396,25 @@ func (c *chrome) bind(name string, f bindingFunc) error {
 	const binding = window[bindingName];
 	window[bindingName] = async (...args) => {
 		const me = window[bindingName];
+
+		// support javascript functions as arguments
+		for (let i = 0; i < args.length; i++) {
+			if (typeof(args[i]) == 'function') {
+				let functions = me['functions']
+				if (!functions) {
+					functions = new Map()
+					me['functions'] = functions
+				}
+				const seq = (functions['lastSeq'] || 0) + 1;
+				functions['lastSeq'] = seq;
+				functions.set(seq, args[i])
+				args[i] = {
+					bindingName: bindingName,
+					seq: seq,
+				}
+			}
+		}
+
 		let errors = me['errors'];
 		let callbacks = me['callbacks'];
 		if (!callbacks) {
