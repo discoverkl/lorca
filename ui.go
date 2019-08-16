@@ -60,7 +60,7 @@ var defaultChromeArgs = []string{
 // your UI code.
 func New(url, dir string, width, height int, customArgs ...string) (UI, error) {
 	if url == "" {
-		url = "data:text/html,<html></html>"
+		url = "data:text/html,<html><title>Go Web</title></html>"
 	}
 	tmpDir := ""
 	if dir == "" {
