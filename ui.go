@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 )
 
@@ -64,10 +64,7 @@ func New(url, dir string, width, height int, customArgs ...string) (UI, error) {
 	}
 	tmpDir := ""
 	if dir == "" {
-		name, err := ioutil.TempDir("", "lorca")
-		if err != nil {
-			return nil, err
-		}
+		name := filepath.Join(os.TempDir(), ".lorca")
 		dir, tmpDir = name, name
 	}
 	args := append(defaultChromeArgs, fmt.Sprintf("--app=%s", url))
@@ -75,6 +72,7 @@ func New(url, dir string, width, height int, customArgs ...string) (UI, error) {
 	args = append(args, fmt.Sprintf("--window-size=%d,%d", width, height))
 	args = append(args, customArgs...)
 	args = append(args, "--remote-debugging-port=0")
+	args = append(args, "--disable-features=TranslateUI")
 
 	chrome, err := newChromeWithArgs(ChromeExecutable(), args...)
 	done := make(chan struct{})

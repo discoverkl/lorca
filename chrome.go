@@ -219,6 +219,7 @@ type targetMessageTemplate struct {
 	Method string `json:"method"`
 	Params struct {
 		Name    string `json:"name"`
+		Type    string `json:"type"`
 		Payload string `json:"payload"`
 		ID      int    `json:"executionContextId"`
 		Args    []struct {
@@ -270,7 +271,15 @@ func (c *chrome) readLoop() {
 			json.Unmarshal([]byte(params.Message), &res)
 
 			if res.ID == 0 && res.Method == "Runtime.consoleAPICalled" || res.Method == "Runtime.exceptionThrown" {
-				log.Println(params.Message)
+				if res.Params.Type == "log" || res.Params.Type == "info" {
+					args := []interface{}{}
+					for _, arg := range res.Params.Args {
+						args = append(args, arg.Value)
+					}
+					log.Println(args...)
+				} else {
+					log.Println(params.Message)
+				}
 			} else if res.ID == 0 && res.Method == "Runtime.bindingCalled" {
 				payload := struct {
 					Name string            `json:"name"`
