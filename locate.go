@@ -63,6 +63,22 @@ func PromptDownload() {
 		return
 	}
 
+	openChromePage()
+}
+
+func PromptUpdate() {
+	title := "Chrome is not up to date"
+	text := "Your Chrome/Chromium installation is not up to date. Would you like to upgrade it now?"
+
+	// Ask user for confirmation
+	if !messageBox(title, text) {
+		return
+	}
+
+	openChromePage()
+}
+
+func openChromePage() {
 	// Open download page
 	url := "https://www.google.com/chrome/"
 	switch runtime.GOOS {
