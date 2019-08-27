@@ -45,6 +45,7 @@ type chrome struct {
 	window   int
 	pending  map[int]chan result
 	bindings map[string]bindingFunc
+	refs map[int]func()
 }
 
 func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
@@ -53,6 +54,7 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 		id:       2,
 		pending:  map[int]chan result{},
 		bindings: map[string]bindingFunc{},
+		refs: map[int]func(){},
 	}
 
 	// Start chrome process
@@ -119,7 +121,53 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 		c.window = win.WindowID
 	}
 
+	err = c.initContext()
+	if err != nil {
+		return nil, err
+	}
+
 	return c, nil
+}
+
+func (c *chrome) ref(seq int, fn func()) {
+	c.refs[seq] = fn
+}
+
+func (c *chrome) unref(seq int) {
+	delete(c.refs, seq)
+}
+
+func (c *chrome) initContext() error {
+	script := fmt.Sprintf(`(function() {
+  function Context() {
+    this.seq = -1
+    this.cancel = () => {
+      window.%s(this.seq, [])
+    }
+  }
+
+  const TODO = new Context()
+
+  window.context = {
+    withCancel() {
+      let ctx = new Context()
+      return [ctx, ctx.cancel]
+    },
+    background() {
+		return new Context()
+    },
+    todo() {
+		return TODO
+    },
+    Context
+  }
+})()`, RefBindingName)
+	_, err := c.send("Page.addScriptToEvaluateOnNewDocument", h{"source": script})
+	if err != nil {
+		return err
+	}
+	_, err = c.eval(script)
+	return err
 }
 
 func (c *chrome) findTarget() (string, error) {
@@ -383,6 +431,13 @@ func (c *chrome) eval(expr string) (json.RawMessage, error) {
 	return c.send("Runtime.evaluate", h{"expression": expr, "awaitPromise": true, "returnByValue": true})
 }
 
+func (c *chrome) call(ref int, args []interface{}) {
+	fn, ok := c.refs[ref]
+	if ok {
+		fn()
+	}
+}
+
 func (c *chrome) bind(name string, f bindingFunc) error {
 	c.Lock()
 	// check if binding already exists
@@ -401,6 +456,7 @@ func (c *chrome) bind(name string, f bindingFunc) error {
 		return err
 	}
 	script := fmt.Sprintf(`(() => {
+	const refBindingName = '%s'
 	const bindingName = '%s';
 	const binding = window[bindingName];
 	window[bindingName] = async (...args) => {
@@ -419,6 +475,19 @@ func (c *chrome) bind(name string, f bindingFunc) error {
 				functions.set(seq, args[i])
 				args[i] = {
 					bindingName: bindingName,
+					seq: seq,
+				}
+			} else if (args[i] instanceof context.Context){
+				const ref = window[refBindingName]
+				let objs = ref['objs']
+				if (!objs) {
+					objs = new Map()
+					ref['objs'] = objs
+				}
+				const seq = (objs['lastSeq'] || 0) + 1;
+				objs['lastSeq'] = seq;
+				args[i].seq = seq
+				args[i] = {
 					seq: seq,
 				}
 			}
@@ -443,7 +512,7 @@ func (c *chrome) bind(name string, f bindingFunc) error {
 		binding(JSON.stringify({name: bindingName, seq, args}));
 		return promise;
 	}})();
-	`, name)
+	`, RefBindingName, name)
 	_, err := c.send("Page.addScriptToEvaluateOnNewDocument", h{"source": script})
 	if err != nil {
 		return err

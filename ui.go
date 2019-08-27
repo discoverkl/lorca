@@ -1,6 +1,7 @@
 package lorca
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"reflect"
 )
+
+const RefBindingName = "__lorca__"
 
 // UI interface allows talking to the HTML5 UI from Go.
 type UI interface {
@@ -84,7 +87,9 @@ func New(url, dir string, width, height int, customArgs ...string) (UI, error) {
 		chrome.cmd.Wait()
 		close(done)
 	}()
-	return &ui{chrome: chrome, done: done, tmpDir: tmpDir}, nil
+	ui := &ui{chrome: chrome, done: done, tmpDir: tmpDir}
+	ui.Bind(RefBindingName, chrome.call)
+	return ui, nil
 }
 
 func (u *ui) Done() <-chan struct{} {
@@ -122,12 +127,26 @@ func (u *ui) Bind(name string, f interface{}) error {
 		}
 		args := []reflect.Value{}
 		functionType := reflect.TypeOf((**Function)(nil))
+		contextType := reflect.TypeOf((*context.Context)(nil))
 		for i := range raw {
 			arg := reflect.New(v.Type().In(i))
+			isContext := false
+			if arg.Type() == contextType {
+				isContext = true
+				arg = reflect.New(reflect.TypeOf((*Context)(nil)))
+			}
+
 			if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {
 				return nil, err
 			}
-			if arg.Type() == functionType {
+
+			if isContext {
+				ctx := arg.Elem().Interface().(*Context)
+				cancel := ctx.WithCancel()
+				defer cancel()
+				u.chrome.ref(ctx.Seq, cancel)
+				defer u.chrome.unref(ctx.Seq)
+			} else if arg.Type() == functionType {
 				fn := arg.Elem().Interface().(*Function)
 				fn.ui = u
 				defer fn.Close()
