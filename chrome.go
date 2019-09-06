@@ -45,7 +45,7 @@ type chrome struct {
 	window   int
 	pending  map[int]chan result
 	bindings map[string]bindingFunc
-	refs map[int]func()
+	refs     map[int]func()
 }
 
 func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
@@ -54,7 +54,7 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chrome, error) {
 		id:       2,
 		pending:  map[int]chan result{},
 		bindings: map[string]bindingFunc{},
-		refs: map[int]func(){},
+		refs:     map[int]func(){},
 	}
 
 	// Start chrome process
@@ -141,8 +141,8 @@ func (c *chrome) initContext() error {
 	script := fmt.Sprintf(`(function() {
   function Context() {
     this.seq = -1
-    this.cancel = () => {
-      window.%s(this.seq, [])
+    this.cancel = async () => {
+      await window.%s(this.seq, [])
     }
   }
 
@@ -393,7 +393,7 @@ func (c *chrome) readLoop() {
 			}{}
 			json.Unmarshal(m.Params, &params)
 			if params.TargetID == c.target {
-				c.kill()
+				// c.kill()			// DO NOT kill -> enable gracefully exit
 				return
 			}
 		}
