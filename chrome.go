@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"sync"
@@ -393,7 +394,8 @@ func (c *chrome) readLoop() {
 			}{}
 			json.Unmarshal(m.Params, &params)
 			if params.TargetID == c.target {
-				// c.kill()			// DO NOT kill -> enable gracefully exit
+				// c.kill()			
+				c.kill()	// Need c.kill() in MacOS
 				return
 			}
 		}
@@ -608,7 +610,8 @@ func (c *chrome) kill() error {
 	}
 	// TODO: cancel all pending requests
 	if state := c.cmd.ProcessState; state == nil || !state.Exited() {
-		return c.cmd.Process.Kill()
+		return c.cmd.Process.Signal(os.Interrupt)	// DO NOT kill -> enable gracefully exit
+		// return c.cmd.Process.Kill()
 	}
 	return nil
 }
